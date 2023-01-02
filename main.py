@@ -209,11 +209,11 @@ def generatehtml():
 
 def downloadtheme(name):
     global config
-    url = "https://api.github.com/repos/devsimsek/WordFlow/tarball/" + name + "_theme"
+    url = "https://api.github.com/repos/devsimsek/WordFlow_themes/tarball/" + name + "_theme"
     try:
         status = urllib.request.urlopen(url)
     except urllib.error.HTTPError:
-        print("Theme " + name + "not found.")
+        print("Theme " + name + " not found.")
         return
     if not os.path.exists(config["directories"]["themes"] + "/" + name):
         if not os.path.exists("temp"):
@@ -319,6 +319,7 @@ def initapp():
         downloadtheme(config["site"]["theme"])
 
     print("Application should be initialized correctly. Thanks for using WordFlow.")
+    exit(1)
 
 
 def argvparser():
