@@ -1,4 +1,3 @@
-import base64
 import datetime
 import html
 import json
@@ -10,9 +9,7 @@ import sys
 import tarfile
 import urllib.error
 import urllib.request
-from io import StringIO
 from pathlib import Path
-from xml.etree import ElementTree
 
 import docx
 import docx2txt
@@ -23,7 +20,6 @@ from docx.oxml.table import CT_Tbl
 from docx.oxml.text.paragraph import CT_P
 from docx.table import _Cell, Table
 from docx.text.paragraph import Paragraph
-import xml.etree.ElementTree as ET
 
 config = {
     "directories": {
