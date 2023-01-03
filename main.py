@@ -1,18 +1,29 @@
+import base64
 import datetime
+import html
 import json
 import os.path
 import random
 import re
 import shutil
 import sys
+import tarfile
+import urllib.error
+import urllib.request
+from io import StringIO
 from pathlib import Path
+from xml.etree import ElementTree
+
 import docx
 import docx2txt
 import unidecode
 import yaml
-import urllib.request
-import urllib.error
-import tarfile
+from docx.document import Document as doctwo
+from docx.oxml.table import CT_Tbl
+from docx.oxml.text.paragraph import CT_P
+from docx.table import _Cell, Table
+from docx.text.paragraph import Paragraph
+import xml.etree.ElementTree as ET
 
 config = {
     "directories": {
@@ -58,6 +69,43 @@ def slugify(text):
     return r
 
 
+def htmltotext(htm):
+    ret = html.unescape(htm)
+    ret = ret.translate({
+        8209: ord('-'),
+        8220: ord('"'),
+        8221: ord('"'),
+        160: ord(' '),
+    })
+    ret = re.sub(r"\s", " ", ret, flags=re.MULTILINE)
+    ret = re.sub("<br>|<br />|</p>|</div>|</h\d>", "\n", ret, flags=re.IGNORECASE)
+    ret = re.sub('<.*?>', ' ', ret, flags=re.DOTALL)
+    ret = re.sub(r"  +", " ", ret)
+    ret = re.compile(r'<img.*?>').sub('', ret)
+    return ret
+
+
+def iter_block_items(parent):
+    """
+    Yield each paragraph and table child within *parent*, in document order.
+    Each returned value is an instance of either Table or Paragraph. *parent*
+    would most commonly be a reference to a main Document object, but
+    also works for a _Cell object, which itself can contain paragraphs and tables.
+    """
+    if isinstance(parent, doctwo):
+        parent_elm = parent.element.body
+    elif isinstance(parent, _Cell):
+        parent_elm = parent._tc
+    else:
+        raise ValueError("something's not right")
+
+    for child in parent_elm.iterchildren():
+        if isinstance(child, CT_P):
+            yield Paragraph(child, parent)
+        elif isinstance(child, CT_Tbl):
+            yield Table(child, parent)
+
+
 def generatehtmltag(document):
     global styles
     run = document.add_run()
@@ -90,9 +138,10 @@ def generatehtmltag(document):
     return "{0}".format(htmlstring)
 
 
-def getcontent(data, document):
+def getcontent(file, document):
     global config
     global content
+    html = ""
     if not os.path.exists(config["directories"]["output"]):
         os.mkdir(config["directories"]["output"])
     if not os.path.exists(config["directories"]["output"] + "/public"):
@@ -100,26 +149,41 @@ def getcontent(data, document):
     if not os.path.exists(config["directories"]["output"] + "/public/images"):
         os.mkdir(config["directories"]["output"] + "/public/images")
     if config["generator"]["input"] == "docx":
-        doc = docx.Document(data)
+        doc = docx.Document(file)
         doc_properties = doc.core_properties
         html = ""
+        images = {}
         id = str(random.randint(10000, 99999))
         imagedir = "/public/images/" + slugify(document["file"]) + id
         if not os.path.exists(config["directories"]["output"] + imagedir):
             os.mkdir(config["directories"]["output"] + imagedir)
-        images = {}
-        docx2txt.process(data, config["directories"]["output"] + imagedir)
+        docx2txt.process(file, config["directories"]["output"] + imagedir)
         for r in doc.part.rels.values():
             if isinstance(r._target, docx.parts.image.ImagePart):
                 images[r.rId] = os.path.basename(r._target.partname)
-        for paragraph in doc.paragraphs:
-            if 'Graphic' in paragraph._p.xml:
-                for rId in images:
-                    if rId in paragraph._p.xml:
-                        html += "<img class='img-fluid' src='" + imagedir + "/" + images[rId] + "'>"
-            else:
-                if not paragraph.text == "":
-                    html += generatehtmltag(paragraph)
+        i = 0
+        for block in iter_block_items(doc):
+            if 'text' in str(block):
+                for run in block.runs:
+                    xmlstr = str(run.element.xml)
+                if 'Graphic' in xmlstr:
+                    for rId in images:
+                        if rId in xmlstr:
+                            html += "<img class='img-fluid' src='" + imagedir + "/" + images[rId] + "'>"
+                if block.text is not None:
+                    html += generatehtmltag(block)
+            elif 'table' in str(block):
+                tablehtml = "<table>"
+                tab = doc.tables[i]
+                for row in tab.rows:
+                    tr = "<tr>"
+                    for cell in row.cells:
+                        tr += "<td>{0}</td>".format(cell.text)
+                    tr += "</tr>"
+                    tablehtml += tr
+                tablehtml += "</table>"
+                html += tablehtml
+                i += 1
         document["id"] = id
         document["imagedir"] = imagedir
         if doc_properties.created == None:
@@ -137,10 +201,6 @@ def scancontent():
     """
     global config
     global content
-    if os.path.exists("generated_output.json"):
-        with open('generated_output.json', 'r') as file:
-            generated_output = file.read()
-        content.update(json.loads(generated_output))
     if os.path.exists(config["directories"]["input"]):
         source = Path(config["directories"]["input"] + "/")
         files = source.glob("*")
@@ -186,13 +246,48 @@ def parsetemplate(input, type):
         print("Warning!!! Template not found...")
 
 
+def generatehomepage():
+    global config
+    global content
+    homecontent = {}
+    homecontent.update(config["author"])
+    homecontent.update(config["site"])
+    homecontent["body"] = ""
+    for post in content:
+        if content[post]["type"] == "post":
+            body = (content[post]["body"][:75] + '..') if len(content[post]["body"]) > 75 else content[post]["body"]
+            homecontent["body"] += '<div class="card post-item bg-transparent border-0 mb-5">'
+            homecontent["body"] += '<div class="card-body px-0">'
+            homecontent["body"] += '<h2 class="card-title">'
+            homecontent["body"] += '<a class="text-white opacity-75-onHover" href="/post/{0}">{1}</a>'.format(
+                slugify(content[post]["file"]), content[post]["title"])
+            homecontent["body"] += '</h2>'
+            homecontent["body"] += '<ul class="post-meta mt-3">'
+            homecontent["body"] += '<li class="d-inline-block mr-3">'
+            homecontent["body"] += '<span class="fas fa-clock text-primary"></span>'
+            homecontent["body"] += '<a class="ml-1" href="#">{0}</a>'.format(content[post]["date"])
+            homecontent["body"] += '</li>'
+            homecontent["body"] += '<li class="d-inline-block">'
+            homecontent["body"] += '<span class="fas fa-list-alt text-primary"></span>'
+            homecontent["body"] += '<a class="ml-1" href="#">{0}</a>'.format(config["author"]["name"])
+            homecontent["body"] += '</li>'
+            homecontent["body"] += '</ul>'
+            homecontent["body"] += '<p class="card-text my-4">{0}</p>'.format(htmltotext(body))
+            homecontent["body"] += '<a href="/post/{0}.html" class="btn btn-primary">Read More</a>'.format(
+                slugify(content[post]["file"]))
+            homecontent["body"] += '</div>'
+            homecontent["body"] += '</div>'
+    filename = config["directories"]["output"] + "/index.html"
+    outfile = open(filename, "w")
+    outfile.write(parsetemplate(homecontent, "home"))
+    outfile.close()
+
+
 def generatehtml():
     scancontent()
+    generatehomepage()
     for doc in content:
         document = content[doc]
-        # parsetemplate(document, document["type"])
-        # outfile.write(parsetemplate(contentconfig, contentconfig["type"]))
-        # outfile.close()
         if not os.path.exists(config["directories"]["output"] + "/" + document["type"]):
             os.mkdir(config["directories"]["output"] + "/" + document["type"])
         filename = config["directories"]["output"] + "/" + document["type"] + "/" + slugify(document["file"]) + ".html"
