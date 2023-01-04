@@ -1,5 +1,4 @@
 import datetime
-import html
 import json
 import os.path
 import random
@@ -10,12 +9,11 @@ import tarfile
 import urllib.error
 import urllib.request
 from pathlib import Path
-
 import docx
 import docx2txt
 import unidecode
 import yaml
-from docx.document import Document as doctwo
+from docx.document import Document as doc
 from docx.oxml.table import CT_Tbl
 from docx.oxml.text.paragraph import CT_P
 from docx.table import _Cell, Table
@@ -43,6 +41,8 @@ config = {
 }
 content = {}
 
+theme = {}
+
 styles = {
     "Title": "h1",
     "Heading 1": "h1",
@@ -66,19 +66,8 @@ def slugify(text):
 
 
 def htmltotext(htm):
-    ret = html.unescape(htm)
-    ret = ret.translate({
-        8209: ord('-'),
-        8220: ord('"'),
-        8221: ord('"'),
-        160: ord(' '),
-    })
-    ret = re.sub(r"\s", " ", ret, flags=re.MULTILINE)
-    ret = re.sub("<br>|<br />|</p>|</div>|</h\d>", "\n", ret, flags=re.IGNORECASE)
-    ret = re.sub('<.*?>', ' ', ret, flags=re.DOTALL)
-    ret = re.sub(r"  +", " ", ret)
-    ret = re.compile(r'<img.*?>').sub('', ret)
-    return ret
+    regex = re.compile(r'<[^>]+>')
+    return regex.sub(' ', htm)
 
 
 def iter_block_items(parent):
@@ -88,7 +77,7 @@ def iter_block_items(parent):
     would most commonly be a reference to a main Document object, but
     also works for a _Cell object, which itself can contain paragraphs and tables.
     """
-    if isinstance(parent, doctwo):
+    if isinstance(parent, doc):
         parent_elm = parent.element.body
     elif isinstance(parent, _Cell):
         parent_elm = parent._tc
@@ -229,6 +218,7 @@ def parsetemplate(input, type):
     :rtype: string
     """
     global config
+    loadtheme()
     themefile = config['directories']['themes'] + "/" + config['site']['theme'] + "/" + type + ".html"
     if os.path.exists(themefile):
         p = re.compile('(\[\[([a-z]+)\]\])')
@@ -242,6 +232,18 @@ def parsetemplate(input, type):
         print("Warning!!! Template not found...")
 
 
+def parsesnippet(input, snippet):
+    global theme
+    loadtheme()
+    p = re.compile('(\[\[([a-z]+)\]\])')
+    matches = p.findall(theme["snippets"][snippet])
+    output = theme["snippets"][snippet]
+    for p, match in matches:
+        if match in input:
+            output = output.replace(p, str(input[match]))
+    return output
+
+
 def generatehomepage():
     global config
     global content
@@ -249,30 +251,16 @@ def generatehomepage():
     homecontent.update(config["author"])
     homecontent.update(config["site"])
     homecontent["body"] = ""
+    tempcontent = {}
     for post in content:
         if content[post]["type"] == "post":
-            body = (content[post]["body"][:75] + '..') if len(content[post]["body"]) > 75 else content[post]["body"]
-            homecontent["body"] += '<div class="card post-item bg-transparent border-0 mb-5">'
-            homecontent["body"] += '<div class="card-body px-0">'
-            homecontent["body"] += '<h2 class="card-title">'
-            homecontent["body"] += '<a class="text-white opacity-75-onHover" href="/post/{0}">{1}</a>'.format(
-                slugify(content[post]["file"]), content[post]["title"])
-            homecontent["body"] += '</h2>'
-            homecontent["body"] += '<ul class="post-meta mt-3">'
-            homecontent["body"] += '<li class="d-inline-block mr-3">'
-            homecontent["body"] += '<span class="fas fa-clock text-primary"></span>'
-            homecontent["body"] += '<a class="ml-1" href="#">{0}</a>'.format(content[post]["date"])
-            homecontent["body"] += '</li>'
-            homecontent["body"] += '<li class="d-inline-block">'
-            homecontent["body"] += '<span class="fas fa-list-alt text-primary"></span>'
-            homecontent["body"] += '<a class="ml-1" href="#">{0}</a>'.format(config["author"]["name"])
-            homecontent["body"] += '</li>'
-            homecontent["body"] += '</ul>'
-            homecontent["body"] += '<p class="card-text my-4">{0}</p>'.format(htmltotext(body))
-            homecontent["body"] += '<a href="/post/{0}.html" class="btn btn-primary">Read More</a>'.format(
-                slugify(content[post]["file"]))
-            homecontent["body"] += '</div>'
-            homecontent["body"] += '</div>'
+            tempcontent.update(content[post])
+            tempcontent["file"] = slugify(tempcontent["file"])
+            tempcontent["body"] = htmltotext(tempcontent["body"])
+            tempcontent["body"] = (tempcontent["body"][:120] + '..') if len(tempcontent["body"]) > 120 else \
+                tempcontent["body"]
+            homecontent["body"] += parsesnippet(tempcontent, "home_post")
+            tempcontent = {}
     filename = config["directories"]["output"] + "/index.html"
     outfile = open(filename, "w")
     outfile.write(parsetemplate(homecontent, "home"))
@@ -296,6 +284,18 @@ def generatehtml():
             shutil.rmtree(config["directories"]["output"] + "/public/assets")
         shutil.copytree(config["directories"]["themes"] + "/" + config["site"]["theme"] + "/assets",
                         config["directories"]["output"] + "/public/assets")
+
+
+def loadtheme():
+    global theme
+    global config
+    if os.path.exists(config["directories"]["themes"] + "/" + config["site"]["theme"]):
+        path = config["directories"]["themes"] + "/" + config["site"]["theme"]
+        with open(path + "/config.yaml") as file:
+            try:
+                theme = yaml.safe_load(file)
+            except yaml.YAMLError as exception:
+                print(exception)
 
 
 def downloadtheme(name):
@@ -354,7 +354,8 @@ def clearcontent():
         shutil.rmtree(config["directories"][directory])
         if not os.path.exists(config["directories"][directory]):
             os.mkdir(config["directories"][directory])
-        os.remove("generated_output.json")
+        if os.path.exists("generated_output.json"):
+            os.remove("generated_output.json")
 
 
 def initapp():
@@ -459,3 +460,4 @@ if __name__ == "__main__":
     argvparser()
 else:
     print("Illegal Launch Option")
+    
