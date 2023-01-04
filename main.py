@@ -268,7 +268,9 @@ def generatehomepage():
 
 
 def generatehtml():
+    print("Started scan.")
     scancontent()
+    print("Scan completed. Generating homepage")
     generatehomepage()
     for doc in content:
         document = content[doc]
@@ -278,24 +280,27 @@ def generatehtml():
         outfile = open(filename, "w")
         outfile.write(parsetemplate(document, document["type"]))
         outfile.close()
-    print("Checking assets for the theme...")
     if os.path.exists(config["directories"]["themes"] + "/" + config["site"]["theme"] + "/assets"):
+        print("Found theme assets, Copying them.")
         if os.path.exists(config["directories"]["output"] + "/public/assets"):
             shutil.rmtree(config["directories"]["output"] + "/public/assets")
         shutil.copytree(config["directories"]["themes"] + "/" + config["site"]["theme"] + "/assets",
                         config["directories"]["output"] + "/public/assets")
+    print("Site generation completed.")
 
 
 def loadtheme():
     global theme
     global config
-    if os.path.exists(config["directories"]["themes"] + "/" + config["site"]["theme"]):
+    if os.path.exists(config["directories"]["themes"] + "/" + config["site"]["theme"] + "/config.yaml"):
         path = config["directories"]["themes"] + "/" + config["site"]["theme"]
         with open(path + "/config.yaml") as file:
             try:
                 theme = yaml.safe_load(file)
             except yaml.YAMLError as exception:
                 print(exception)
+    else:
+        print("Theme configuration file not found!")
 
 
 def downloadtheme(name):
@@ -460,4 +465,3 @@ if __name__ == "__main__":
     argvparser()
 else:
     print("Illegal Launch Option")
-    
