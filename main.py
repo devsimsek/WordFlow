@@ -154,7 +154,9 @@ def getcontent(file, document):
                 if 'Graphic' in xmlstr:
                     for rId in images:
                         if rId in xmlstr:
-                            html += "<img class='img-fluid' src='" + imagedir + "/" + images[rId] + "'>"
+                            htmlstring = "<img class='img-fluid' src='" + imagedir + "/" + images[rId] + "'>"
+                            if htmlstring not in html:
+                                html += htmlstring
                 if block.text is not None:
                     html += generatehtmltag(block)
             elif 'table' in str(block):
