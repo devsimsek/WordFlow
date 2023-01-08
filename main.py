@@ -8,6 +8,7 @@ import sys
 import tarfile
 import urllib.error
 import urllib.request
+from collections import OrderedDict
 from pathlib import Path
 import docx
 import docx2txt
@@ -254,7 +255,8 @@ def generatehomepage():
     homecontent.update(config["site"])
     homecontent["body"] = ""
     tempcontent = {}
-    for post in content:
+    date_order = OrderedDict(sorted(content.items()), key=lambda t: t["date"])
+    for post in date_order:
         if content[post]["type"] == "post":
             tempcontent.update(content[post])
             tempcontent["file"] = slugify(tempcontent["file"])
