@@ -94,21 +94,24 @@ def iter_block_items(parent):
 
 def generatehtmltag(document):
     global styles
-    run = document.add_run()
-    font = run.font
+    document.add_run()
+    font = document.runs[0].font
     htmlstring = ""
     css = ""
     tag = styles[document.style.name]
     if document.paragraph_format.alignment is not None:
         css += "text-align: {0};".format(str(document.paragraph_format.alignment).replace(" (1)", ""))
+    """
+    Removed due to nonlogical margins :D
     if document.paragraph_format.left_indent is not None:
         css += "margin-left: {0};".format(document.paragraph_format.left_indent.pt * 0.1)
     if document.paragraph_format.right_indent is not None:
         css += "margin-right: {0};".format(document.paragraph_format.right_indent.pt * 0.1)
+    """
     if document.paragraph_format.line_spacing is not None:
-        css += "line-height: {0};".format(document.paragraph_format.line_spacing)
+        css += "line-height: {0};".format(document.paragraph_format.line_spacing.pt)
     if font.size is not None:
-        css += "font-size: {0};".format(font.size)
+        css += "font-size: {0};".format(font.size.pt)
     if font.italic is not None and font.italic:
         css += "font-style: italic;"
     if font.bold is not None and font.bold:
