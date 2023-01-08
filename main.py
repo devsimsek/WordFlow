@@ -257,14 +257,15 @@ def generatehomepage():
     tempcontent = {}
     date_order = OrderedDict(sorted(content.items()), key=lambda t: t["date"])
     for post in date_order:
-        if content[post]["type"] == "post":
-            tempcontent.update(content[post])
-            tempcontent["file"] = slugify(tempcontent["file"])
-            tempcontent["body"] = htmltotext(tempcontent["body"])
-            tempcontent["body"] = (tempcontent["body"][:120] + '..') if len(tempcontent["body"]) > 120 else \
-                tempcontent["body"]
-            homecontent["body"] += parsesnippet(tempcontent, "home_post")
-            tempcontent = {}
+        if type(date_order[post]) is dict:
+            if content[post]["type"] == "post":
+                tempcontent.update(content[post])
+                tempcontent["file"] = slugify(tempcontent["file"])
+                tempcontent["body"] = htmltotext(tempcontent["body"])
+                tempcontent["body"] = (tempcontent["body"][:120] + '..') if len(tempcontent["body"]) > 120 else \
+                    tempcontent["body"]
+                homecontent["body"] += parsesnippet(tempcontent, "home_post")
+                tempcontent = {}
     filename = config["directories"]["output"] + "/index.html"
     outfile = open(filename, "w")
     outfile.write(parsetemplate(homecontent, "home"))
