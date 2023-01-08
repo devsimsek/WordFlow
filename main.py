@@ -100,7 +100,7 @@ def generatehtmltag(document):
     css = ""
     tag = styles[document.style.name]
     if document.paragraph_format.alignment is not None:
-        css += "text-align: {0};".format(document.paragraph_format.alignment)
+        css += "text-align: {0};".format(str(document.paragraph_format.alignment).replace(" (1)", ""))
     if document.paragraph_format.left_indent is not None:
         css += "margin-left: {0};".format(document.paragraph_format.left_indent.pt * 0.1)
     if document.paragraph_format.right_indent is not None:
