@@ -484,9 +484,12 @@ def initapp():
 
 def argvparser():
     args = sys.argv[1:]
+    force = False
     for arg in args:
         if arg == "init" or arg == "-init":
             initapp()
+        elif arg == "-f" or arg == "--force":
+            force = True
         elif arg == "generate" or arg == "gen":
             generatehtml()
         elif arg == "clear":
@@ -502,16 +505,22 @@ def argvparser():
         elif arg == "scan":
             scancontent()
         elif arg == "clearcontent" or arg == "-cc":
-            val = input(
-                "Want to wipe all generated content? (yes or no)> ")
-            if val != "yes":
-                print("Bye :)")
+            if not force:
+                val = input(
+                    "Want to wipe all generated content? (yes or no)> ")
+                if val != "yes":
+                    print("Bye :)")
+                else:
+                    clearcontent()
             else:
                 clearcontent()
         elif arg == "publishapi":
-            print("This option will make api published. Are you sure?")
-            val = input("(yes, no)> ")
-            if val == "yes":
+            if not force:
+                print("This option will make api published. Are you sure?")
+                val = input("(yes, no)> ")
+                if val == "yes":
+                    shutil.copyfile("generated_output.json", config["directories"]["output"] + "/api.json")
+            else:
                 shutil.copyfile("generated_output.json", config["directories"]["output"] + "/api.json")
         else:
             print("Project WordFlow. Copyright (C) devsimsek.")
