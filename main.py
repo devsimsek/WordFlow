@@ -509,7 +509,7 @@ def argvparser():
             print("This option will make api published. Are you sure?")
             val = input("(yes, no)> ")
             if val == "yes":
-                shutil.copyfile("generated_output.json", config["directories"]["output"])
+                shutil.copyfile("generated_output.json", config["directories"]["output"] + "/api.json")
         else:
             print("Project WordFlow. Copyright (C) devsimsek.")
             print("Help guide will be added when I can create a stable version.")
