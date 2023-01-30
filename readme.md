@@ -46,7 +46,7 @@ WordFlow will automaticly call initializer for you to configure.
 Thanks to all users of this project.
 | Name | Site Address | Category | Source |
 | ---- | ------------ | -------- | ---- |
-| Simsek's Notes | (simseks.github.io)[https://simseks.github.io] | Blog | docx (Microsoft Word) |
+| Simsek's Notes | [simseks.github.io](https://simseks.github.io) | Blog | docx (Microsoft Word) |
 
 If you are using WordFlow and want to share your site here please open a pull request.
 
