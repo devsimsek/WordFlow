@@ -6,6 +6,7 @@ import re
 import shutil
 import sys
 import tarfile
+import time
 import urllib.error
 import urllib.request
 from collections import OrderedDict
@@ -14,6 +15,7 @@ import docx
 import docx2txt
 import unidecode
 import yaml
+import markdown
 from docx.document import Document as doc
 from docx.oxml.table import CT_Tbl
 from docx.oxml.text.paragraph import CT_P
@@ -100,13 +102,13 @@ def parsestyle(document, isrun):
         if document.paragraph_format.alignment is not None:
             css += "text-align: {0};".format(str(document.paragraph_format.alignment).replace(" (1)", ""))
         if document.paragraph_format.left_indent is not None:
-            css += "left: {0};".format(document.paragraph_format.left_indent.pt * 0.1)
+            css += "left: {0}px;".format(int(document.paragraph_format.left_indent.pt * 0.1))
         if document.paragraph_format.right_indent is not None:
-            css += "right: {0};".format(document.paragraph_format.right_indent.pt * 0.1)
+            css += "right: {0}px;".format(int(document.paragraph_format.right_indent.pt * 0.1))
         if document.paragraph_format.line_spacing is not None:
-            css += "line-height: {0};".format(document.paragraph_format.line_spacing.pt)
+            css += "line-height: {0}px;".format(int(document.paragraph_format.line_spacing.pt))
         if font.size is not None:
-            css += "font-size: {0};".format(font.size.pt)
+            css += "font-size: {0}px;".format(int(font.size.pt))
         if font.italic is not None and font.italic:
             css += "font-style: italic;"
         if font.bold is not None and font.bold:
@@ -214,6 +216,18 @@ def getcontent(file, document):
             document["date"] = datetime.date.today().strftime("%B %d, %Y")
         else:
             document["date"] = doc_properties.created.strftime("%B %d, %Y")
+        document["body"] = html
+        content[document["file"]] = document
+    else:
+        filecontent = open(file, "r")
+        id = str(random.randint(10000, 99999))
+        imagedir = "/public/images/" + slugify(document["file"]) + id
+        if not os.path.exists(config["directories"]["output"] + imagedir):
+            os.mkdir(config["directories"]["output"] + imagedir)
+        html = markdown.markdown(filecontent.read(), extensions=['extra', 'toc'])
+        document["id"] = id
+        document["imagedir"] = imagedir
+        document["date"] = time.ctime(os.stat(file).st_birthtime)
         document["body"] = html
         content[document["file"]] = document
 
