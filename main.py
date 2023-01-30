@@ -474,12 +474,11 @@ def initapp():
             os.mkdir(config["directories"]["input"] + "/post")
         if not os.path.exists(config["directories"]["input"] + "/page"):
             os.mkdir(config["directories"]["input"] + "/page")
-    if config["site"]["theme"] == "default":
-        print("Installing Theme")
-        downloadtheme(config["site"]["theme"])
+    print("Installing Theme")
+    downloadtheme(config["site"]["theme"])
 
     print("Application should be initialized correctly. Thanks for using WordFlow.")
-    exit(1)
+    exit(0)
 
 
 def argvparser():
