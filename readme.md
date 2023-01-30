@@ -2,7 +2,12 @@
 
 ## About This Project
 
-A lightweight theme for the project [WordFlow](https://github.com/devsimsek/WordFlow)
+WordFlow is a static site generator built by devsimsek using Python.
+
+Its main goal is to be sourced using DOCX and Markdown files.
+
+Be aware that I am still developing this project, and currently it's far from a stable release, so do expect bugs and
+errors.
 
 ## Installation
 
