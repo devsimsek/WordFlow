@@ -259,6 +259,11 @@ def scancontent():
                         getcontent(filecontent, document)
             else:
                 print("Found misplaced file " + file.name + " please categorize your documents correctly. Skipping.")
+    content["wf_site_config"] = {
+        "theme": config["site"]["theme"],
+        "author": config["author"],
+        "generator": config["generator"]["input"]
+    }
     json_object = json.dumps(content, indent=4)
     with open('generated_output.json', 'w') as file:
         file.write(json_object)
@@ -500,6 +505,14 @@ def argvparser():
                 print("Bye :)")
             else:
                 clearcontent()
+        elif arg == "publishapi":
+            print("This option will make api published. Are you sure?")
+            val = input("(yes, no)> ")
+            if val == "yes":
+                shutil.copyfile("generated_output.json", config["directories"]["output"])
+        else:
+            print("Project WordFlow. Copyright (C) devsimsek.")
+            print("Help guide will be added when I can create a stable version.")
 
 
 def wordflow():
