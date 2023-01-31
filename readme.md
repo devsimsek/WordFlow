@@ -21,9 +21,9 @@ WordFlow will automaticly call initializer for you to configure.
 
 ## Roadmap
 
+* [ ] Add tag and category integration
 * [ ] Work on json api generation. Order content by their type and all.
 * [ ] Create more friendly cli
-* [ ] Add tag and category integration
 * [ ] Migrate to the markdown to html generator library (undependent)
 * [ ] Theme partialization
 * [ ] Automatic version checker & updater
