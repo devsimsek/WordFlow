@@ -42,6 +42,9 @@ config = {
         "input": "docx",  # input language (md soon..)
     }
 }
+
+api = {}
+
 content = {}
 
 theme = {}
@@ -172,6 +175,8 @@ def getcontent(file, document):
         os.mkdir(config["directories"]["output"] + "/public")
     if not os.path.exists(config["directories"]["output"] + "/public/images"):
         os.mkdir(config["directories"]["output"] + "/public/images")
+    if not document["type"] in content:
+        content[document["type"]] = {}
     if config["generator"]["input"] == "docx":
         doc = docx.Document(file)
         doc_properties = doc.core_properties
@@ -217,7 +222,7 @@ def getcontent(file, document):
         else:
             document["date"] = doc_properties.created.strftime("%B %d, %Y")
         document["body"] = html
-        content[document["file"]] = document
+        content[document["type"]][document["file"]] = document
     else:
         filecontent = open(file, "r")
         id = str(random.randint(10000, 99999))
@@ -229,7 +234,7 @@ def getcontent(file, document):
         document["imagedir"] = imagedir
         document["date"] = time.ctime(os.stat(file).st_birthtime)
         document["body"] = html
-        content[document["file"]] = document
+        content[document["type"]][document["file"]] = document
 
 
 def scancontent():
@@ -245,18 +250,45 @@ def scancontent():
         for file in files:
             if file.is_dir():
                 doctype = file.name
-                file = Path(config["directories"]["input"] + "/" + file.name).glob("*." + config["generator"]["input"])
+                file = Path(config["directories"]["input"] + "/" + file.name).glob("*")
                 for filecontent in file:
-                    document = {
-                        "type": doctype,
-                        "file": filecontent.name.split(".")[0],
-                        "title": filecontent.name.split(".")[0],
-                        "body": "",
-                    }
-                    if not document["file"] in content:
-                        document.update(config["author"])
-                        document.update(config["site"])
-                        getcontent(filecontent, document)
+                    if filecontent.is_dir():
+                        category = filecontent.name
+                        file = Path(config["directories"]["input"] + "/" + doctype + "/" + filecontent.name).glob(
+                            "*." + config["generator"]["input"])
+                        for filecontent in file:
+                            document = {
+                                "type": doctype,
+                                "category": category,
+                                "file": filecontent.name.split(".")[0],
+                                "title": filecontent.name.split(".")[0],
+                                "body": "",
+                            }
+                            if not document["type"] in content:
+                                content[document["type"]] = {}
+                            if not document["file"] in content[document["type"]]:
+                                document.update(config["author"])
+                                document.update(config["site"])
+                                getcontent(filecontent, document)
+                    else:
+                        if not filecontent.suffix == "." + config["generator"]["input"]:
+                            continue
+                        else:
+                            document = {
+                                "type": doctype,
+                                "category": False,
+                                "file": filecontent.name.split(".")[0],
+                                "title": filecontent.name.split(".")[0],
+                                "body": "",
+                            }
+                            if not document["type"] in content:
+                                content[document["type"]] = {}
+                            if not document["file"] in content[document["type"]]:
+                                document.update(config["author"])
+                                document.update(config["site"])
+                                getcontent(filecontent, document)
+                            else:
+                                print("Uwuwğs")
             else:
                 print("Found misplaced file " + file.name + " please categorize your documents correctly. Skipping.")
     content["wf_site_config"] = {
@@ -334,15 +366,18 @@ def generatehtml():
     print("Scan completed. Generating homepage")
     generatehomepage()
     for doc in content:
-        if doc == "wf_site_config":
-            continue
-        document = content[doc]
-        if not os.path.exists(config["directories"]["output"] + "/" + document["type"]):
-            os.mkdir(config["directories"]["output"] + "/" + document["type"])
-        filename = config["directories"]["output"] + "/" + document["type"] + "/" + slugify(document["file"]) + ".html"
-        outfile = open(filename, "w")
-        outfile.write(parsetemplate(document, document["type"]))
-        outfile.close()
+        innercontent = content[doc]
+        for documentcontent in innercontent:
+            if doc == "wf_site_config":
+                continue
+            document = content[doc][documentcontent]
+            if not os.path.exists(config["directories"]["output"] + "/" + document["type"]):
+                os.mkdir(config["directories"]["output"] + "/" + document["type"])
+            filename = config["directories"]["output"] + "/" + document["type"] + "/" + slugify(
+                document["file"]) + ".html"
+            outfile = open(filename, "w")
+            outfile.write(parsetemplate(document, document["type"]))
+            outfile.close()
     if os.path.exists(config["directories"]["themes"] + "/" + config["site"]["theme"] + "/assets"):
         print("Found theme assets, Copying them.")
         if os.path.exists(config["directories"]["output"] + "/public/assets"):

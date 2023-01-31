@@ -21,7 +21,7 @@ WordFlow will automaticly call initializer for you to configure.
 
 ## Roadmap
 
-* [ ] Add tag and category integration
+* [x] Add category integration
 * [ ] Work on json api generation. Order content by their type and all.
 * [ ] Create more friendly cli
 * [ ] Migrate to the markdown to html generator library (undependent)
@@ -33,6 +33,7 @@ WordFlow will automaticly call initializer for you to configure.
 
 ## Changelog
 
+* Jan 31, 2023 - Added category integration. Now you can just create subdirectories as a category.
 * Jan 30, 2023 - Added Proper readme & Started integration of the markdown language & Made public json api
 * Jan 9, 2023 - Optimization around the docx text renderer
 * Jan 8, 2023 - Optimized homepage generation
