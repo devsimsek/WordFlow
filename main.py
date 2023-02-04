@@ -362,6 +362,9 @@ def generatehomepage():
 def generatehtml():
     print("Started scan.")
     scancontent()
+    if not "post" in content:
+        print("No content found.")
+        exit(0)
     print("Scan completed. Generating homepage")
     generatehomepage()
     categoryhomehtml = {}
