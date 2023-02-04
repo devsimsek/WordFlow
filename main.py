@@ -364,11 +364,23 @@ def generatehtml():
     scancontent()
     print("Scan completed. Generating homepage")
     generatehomepage()
+    categoryhomehtml = {}
+    categoryhomehtml.update(config["author"])
+    categoryhomehtml.update(config["site"])
+    categoryhomehtml["body"] = ""
+    if not os.path.exists(config["directories"]["output"] + "/category/"):
+        os.mkdir(config["directories"]["output"] + "/category/")
     for doc in content:
+        if doc == "wf_site_config":
+            continue
+        categoryfile = config["directories"]["output"] + "/category/" + doc + ".html"
+        categoryhomehtml["body"] += parsesnippet({"file": doc + ".html", "title": doc, "body": doc}, "category_home")
         innercontent = content[doc]
+        categoryhtml = {}
+        categoryhtml.update(config["author"])
+        categoryhtml.update(config["site"])
+        categoryhtml["body"] = ""
         for documentcontent in innercontent:
-            if doc == "wf_site_config":
-                continue
             document = content[doc][documentcontent]
             if not os.path.exists(config["directories"]["output"] + "/" + document["type"]):
                 os.mkdir(config["directories"]["output"] + "/" + document["type"])
@@ -377,6 +389,19 @@ def generatehtml():
             outfile = open(filename, "w")
             outfile.write(parsetemplate(document, document["type"]))
             outfile.close()
+            tempcontent = {}
+            tempcontent.update(document)
+            categoryhtml["title"] = doc
+            tempcontent["body"] = htmltotext(tempcontent["body"])
+            tempcontent["body"] = (tempcontent["body"][:120] + '..') if len(tempcontent["body"]) > 120 else \
+                tempcontent["body"]
+            categoryhtml["body"] += parsesnippet(tempcontent, "category")
+        outfile = open(categoryfile, "w")
+        outfile.write(parsetemplate(categoryhtml, "category_page"))
+        outfile.close()
+    outfile = open(config["directories"]["output"] + "/categories.html", "w")
+    outfile.write(parsetemplate(categoryhomehtml, "category"))
+    outfile.close()
     if os.path.exists(config["directories"]["themes"] + "/" + config["site"]["theme"] + "/assets"):
         print("Found theme assets, Copying them.")
         if os.path.exists(config["directories"]["output"] + "/public/assets"):
