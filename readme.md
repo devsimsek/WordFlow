@@ -54,6 +54,7 @@ Thanks to all users of this project.
 | Name | Site Address | Category | Source |
 | ---- | ------------ | -------- | ---- |
 | Simsek's Notes | [simseks.github.io](https://simseks.github.io) | Blog | docx (Microsoft Word) |
+| Lessons by devsimsek | [lessons.smsk.me](http://lessons.smsk.me) | Blog | md (Markdown)|
 
 If you are using WordFlow and want to share your site here please open a pull request.
 
