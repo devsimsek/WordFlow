@@ -33,6 +33,7 @@ WordFlow will automaticly call initializer for you to configure.
 
 ## Changelog
 
+* Sept 17, 2023 - Removed category integration. Optimized code. Tests will begin soon.
 * Jan 31, 2023 - Added category integration. Now you can just create subdirectories as a category.
 * Jan 30, 2023 - Added Proper readme & Started integration of the markdown language & Made public json api
 * Jan 9, 2023 - Optimization around the docx text renderer
@@ -45,7 +46,7 @@ WordFlow will automaticly call initializer for you to configure.
 ## Possible Bugs
 
 - [ ] (Investigating) Initializer generated error when using utf-8 characters
-    - Details: UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc4 in position 16: invalid continuation byte
+	- Details: UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc4 in position 16: invalid continuation byte
 
 ## Active Users
 
