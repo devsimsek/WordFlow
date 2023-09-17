@@ -1,26 +1,19 @@
-import datetime
 import json
-import os.path
-import random
-import re
-import shutil
-import sys
 import tarfile
-import time
-import urllib.error
-import urllib.request
+import urllib
 from collections import OrderedDict
 from pathlib import Path
-import docx
-import docx2txt
-import unidecode
+from docx import Document
+import sys
 import yaml
 import markdown
-from docx.document import Document as doc
-from docx.oxml.table import CT_Tbl
-from docx.oxml.text.paragraph import CT_P
-from docx.table import _Cell, Table
-from docx.text.paragraph import Paragraph
+import os
+import datetime
+import re
+import unidecode
+import shutil
+import urllib.error
+import urllib.request
 
 config = {
     "directories": {
@@ -39,29 +32,13 @@ config = {
         "about": "I publish my word documents using wordflow!",
     },
     "generator": {
-        "input": "docx",  # input language (md soon..)
+        "mode": "md",  # md or docx
     }
 }
-
-api = {}
 
 content = {}
 
 theme = {}
-
-styles = {
-    "Title": "h1",
-    "Heading 1": "h1",
-    "Heading 2": "h2",
-    "Heading 3": "h3",
-    "Emphasis": "u",
-    "Normal": "p",
-    "List Paragraph": "li",
-    "List Number": "li",
-    "List Bullet": "li",
-    "Intense Quote": "q",
-    "Default Paragraph Font": "span"
-}
 
 
 def slugify(text):
@@ -72,266 +49,175 @@ def slugify(text):
     return r
 
 
-def htmltotext(htm):
+def html2text(htm):
     regex = re.compile(r'<[^>]+>')
     return regex.sub(' ', htm)
 
 
-def iter_block_items(parent):
-    """
-    Yield each paragraph and table child within *parent*, in document order.
-    Each returned value is an instance of either Table or Paragraph. *parent*
-    would most commonly be a reference to a main Document object, but
-    also works for a _Cell object, which itself can contain paragraphs and tables.
-    """
-    if isinstance(parent, doc):
-        parent_elm = parent.element.body
-    elif isinstance(parent, _Cell):
-        parent_elm = parent._tc
-    else:
-        raise ValueError("something's not right")
-
-    for child in parent_elm.iterchildren():
-        if isinstance(child, CT_P):
-            yield Paragraph(child, parent)
-        elif isinstance(child, CT_Tbl):
-            yield Table(child, parent)
-
-
-def parsestyle(document, isrun):
-    if not isrun:
-        css = ""
-        font = document.runs[0].font
-        if document.paragraph_format.alignment is not None:
-            css += "text-align: {0};".format(str(document.paragraph_format.alignment).replace(" (1)", ""))
-        if document.paragraph_format.left_indent is not None:
-            css += "left: {0}px;".format(int(document.paragraph_format.left_indent.pt * 0.1))
-        if document.paragraph_format.right_indent is not None:
-            css += "right: {0}px;".format(int(document.paragraph_format.right_indent.pt * 0.1))
-        if document.paragraph_format.line_spacing is not None:
-            css += "line-height: {0}px;".format(int(document.paragraph_format.line_spacing.pt))
-        if font.size is not None:
-            css += "font-size: {0}px;".format(int(font.size.pt))
-        if font.italic is not None and font.italic:
-            css += "font-style: italic;"
-        if font.bold is not None and font.bold:
-            css += "font-weight: bold;"
-        if font.underline is not None:
-            if font.underline:
-                css += "text-decoration-line: underline;"
-            else:
-                css += "text-decoration-line: " + font.underline + ";"
-        if font.highlight_color is not None:
-            css += "background_color: #" + str(font.highlight_color) + ";"
-        if font.color.rgb is not None:
-            css += "color: #" + str(font.color.rgb) + ";"
-        return css
-    else:
-        child_font = document.font
-        child_css = ""
-        if child_font.size is not None:
-            child_css += "font-size: {0};".format(child_font.size.pt)
-        if child_font.italic is not None and child_font.italic:
-            child_css += "font-style: italic;"
-        if child_font.bold is not None and child_font.bold:
-            child_css += "font-weight: bold;"
-        if child_font.underline is not None:
-            if child_font.underline:
-                child_css += "text-decoration-line: underline;"
-            else:
-                child_css += "text-decoration-line: " + str(child_font.underline) + ";"
-        if child_font.highlight_color is not None:
-            child_css += "background_color: #" + str(child_font.highlight_color) + ";"
-        if child_font.color.rgb is not None:
-            child_css += "color: #" + str(child_font.color.rgb) + ";"
-        return child_css
-
-
-def generatehtmltag(document):
-    global styles
-    document.add_run()
-    htmlstring = ""
-    css = parsestyle(document, False)
-    tag = styles[document.style.name]
-    htmlstring += "<" + tag + " style='" + css + "'>"
-    for run in document.runs:
-        child_css = parsestyle(run, True)
-        child_tag = styles[run.style.name]
-        if run.text != "":
-            htmlstring += "<" + child_tag + " style='" + child_css + "'>" + run.text + "</" + child_tag + ">"
-    htmlstring += "</" + tag + ">"
-    if document.text != "":
-        return "{0}".format(htmlstring)
-    return ""
-
-
-def getcontent(file, document):
-    global config
-    global content
+def docx2html(docx_file):
+    doc = Document(docx_file)
     html = ""
-    if not os.path.exists(config["directories"]["output"]):
-        os.mkdir(config["directories"]["output"])
-    if not os.path.exists(config["directories"]["output"] + "/public"):
-        os.mkdir(config["directories"]["output"] + "/public")
-    if not os.path.exists(config["directories"]["output"] + "/public/images"):
-        os.mkdir(config["directories"]["output"] + "/public/images")
-    if not document["type"] in content:
-        content[document["type"]] = {}
-    if config["generator"]["input"] == "docx":
-        doc = docx.Document(file)
-        doc_properties = doc.core_properties
-        html = ""
-        images = {}
-        id = str(random.randint(10000, 99999))
-        imagedir = "/public/images/" + slugify(document["file"]) + id
-        if not os.path.exists(config["directories"]["output"] + imagedir):
-            os.mkdir(config["directories"]["output"] + imagedir)
-        docx2txt.process(file, config["directories"]["output"] + imagedir)
-        for r in doc.part.rels.values():
-            if isinstance(r._target, docx.parts.image.ImagePart):
-                images[r.rId] = os.path.basename(r._target.partname)
-        i = 0
-        for block in iter_block_items(doc):
-            if 'text' in str(block):
-                for run in block.runs:
-                    xmlstr = str(run.element.xml)
-                if 'Graphic' in xmlstr:
-                    for rId in images:
-                        if rId in xmlstr:
-                            htmlstring = "<img class='img-fluid' src='" + imagedir + "/" + images[rId] + "'>"
-                            if htmlstring not in html:
-                                html += htmlstring
-                if block.text is not None:
-                    html += generatehtmltag(block)
-            elif 'table' in str(block):
-                tablehtml = "<table>"
-                tab = doc.tables[i]
-                for row in tab.rows:
-                    tr = "<tr>"
-                    for cell in row.cells:
-                        tr += "<td>{0}</td>".format(cell.text)
-                    tr += "</tr>"
-                    tablehtml += tr
-                tablehtml += "</table>"
-                html += tablehtml
-                i += 1
-        document["id"] = id
-        document["imagedir"] = imagedir
-        if doc_properties.created == None:
-            document["date"] = datetime.date.today().strftime("%B %d, %Y")
+    html += "<style>"
+    for style in doc.styles:
+        if style.name != "Normal":
+            font_style = ""
+            try:
+                font_style += style.font.bold and "font-weight: bold;" or ""
+                font_style += style.font.italic and "font-style: italic;" or ""
+                font_size = style.font.size
+                if font_size:
+                    font_style += f"font-size: {font_size.pt}pt;"
+            except AttributeError:
+                pass  # Handle styles without font attributes
+
+            if font_style:
+                html += f".{style.name} {{ {font_style} }}\n"
+    html += "</style>"
+
+    for paragraph in doc.paragraphs:
+        style_name = paragraph.style.name
+        if style_name != "Normal":
+            html += f'<p class="{style_name}">{paragraph.text}</p>'
         else:
-            document["date"] = doc_properties.created.strftime("%B %d, %Y")
-        document["body"] = html
-        content[document["type"]][document["file"]] = document
-    else:
-        filecontent = open(file, "r")
-        id = str(random.randint(10000, 99999))
-        imagedir = "/public/images/" + slugify(document["file"]) + id
-        if not os.path.exists(config["directories"]["output"] + imagedir):
-            os.mkdir(config["directories"]["output"] + imagedir)
-        html = markdown.markdown(filecontent.read(), extensions=['extra', 'toc'])
-        document["id"] = id
-        document["imagedir"] = imagedir
-        document["date"] = time.ctime(os.stat(file).st_birthtime)
-        document["body"] = html
-        content[document["type"]][document["file"]] = document
+            html += f"<p>{paragraph.text}</p>"
+
+    for table in doc.tables:
+        html += "<table>"
+        for row in table.rows:
+            html += "<tr>"
+            for cell in row.cells:
+                html += f"<td>{cell.text}</td>"
+            html += "</tr>"
+        html += "</table>"
+
+    for idx, image in enumerate(doc.inline_shapes):
+        image_data = image.blob
+        image_format = image.ext
+        image_file = f"image_{idx}.{image_format}"
+        with open(image_file, "wb") as img_file:
+            img_file.write(image_data)
+        html += f'<img src="{image_file}" alt="Image" />'
+    return html
 
 
-def scancontent():
-    """
-    Scan Posts
-    Document() document.core_properties.created for date
-    """
-    global config
+def md2html(markdown_file):
+    with open(markdown_file, "r", encoding="utf-8") as md_file:
+        markdown_content = md_file.read()
+
+    html_content = markdown.markdown(markdown_content)
+
+    return html_content
+
+
+def scandir(directory_path):
     global content
-    if os.path.exists(config["directories"]["input"]):
-        source = Path(config["directories"]["input"] + "/")
-        files = source.glob("*")
-        for file in files:
-            if file.is_dir():
-                doctype = file.name
-                file = Path(config["directories"]["input"] + "/" + file.name).glob("*")
-                for filecontent in file:
-                    if filecontent.is_dir():
-                        category = filecontent.name
-                        file = Path(config["directories"]["input"] + "/" + doctype + "/" + filecontent.name).glob(
-                            "*." + config["generator"]["input"])
-                        for filecontent in file:
-                            document = {
-                                "type": doctype,
-                                "category": category,
-                                "file": filecontent.name.split(".")[0],
-                                "title": filecontent.name.split(".")[0],
-                                "body": "",
-                            }
-                            if not document["type"] in content:
-                                content[document["type"]] = {}
-                            if not document["file"] in content[document["type"]]:
-                                document.update(config["author"])
-                                document.update(config["site"])
-                                getcontent(filecontent, document)
-                    else:
-                        if not filecontent.suffix == "." + config["generator"]["input"]:
-                            continue
-                        else:
-                            document = {
-                                "type": doctype,
-                                "category": False,
-                                "file": filecontent.name.split(".")[0],
-                                "title": filecontent.name.split(".")[0],
-                                "body": "",
-                            }
-                            if not document["type"] in content:
-                                content[document["type"]] = {}
-                            if not document["file"] in content[document["type"]]:
-                                document.update(config["author"])
-                                document.update(config["site"])
-                                getcontent(filecontent, document)
-                            else:
-                                print("Uwuwğs")
-            else:
-                print("Found misplaced file " + file.name + " please categorize your documents correctly. Skipping.")
-    content["wf_site_config"] = {
-        "theme": config["site"]["theme"],
-        "author": config["author"],
-        "generator": config["generator"]["input"]
-    }
-    json_object = json.dumps(content, indent=4)
-    with open('generated_output.json', 'w') as file:
-        file.write(json_object)
+    global config
+
+    if not os.path.exists(directory_path):
+        raise ValueError(f'Directory not found: {directory_path}')
+
+    for filename in os.listdir(directory_path):
+        if config["generator"]["mode"] == "md":
+            if filename.endswith('.md'):
+                markdown_file = os.path.join(directory_path, filename)
+                html_content = md2html(markdown_file)
+                content[filename] = {}
+                content[filename]["body"] = html_content
+                content[filename]["title"] = os.path.splitext(filename)[0]
+                content[filename]["outfile"] = config["directories"]["output"] + "/post/" + os.path.splitext(filename)[
+                    0] + ".html"
+                content[filename]["date"] = datetime.datetime.fromtimestamp(os.path.getctime(markdown_file)).strftime(
+                    '%Y-%m-%d %H:%M:%S')
+        elif config["generator"]["mode"] == "docx":
+            if filename.endswith('.docx'):
+                docxfile = os.path.join(directory_path, filename)
+                html_content = md2html(docxfile)
+                content[filename] = {}
+                content[filename]["body"] = html_content
+                content[filename]["title"] = os.path.splitext(filename)[0]
+                content[filename]["outfile"] = config["directories"]["output"] + "/post/" + os.path.splitext(filename)[
+                    0] + ".html"
+                content[filename]["date"] = datetime.datetime.fromtimestamp(os.path.getctime(docxfile)).strftime(
+                    '%Y-%m-%d %H:%M:%S')
+        else:
+            print("mode not supported")
+        with open('api.json', 'w') as f:
+            f.write(json.dumps(content, indent=4))
 
 
-def parsetemplate(input, type):
-    """
-    :input: string whom will be added into parsed template
-    :type: page, post, category, search, profile
-    :rtype: string
-    """
+def loadtheme():
+    global theme, config
+    if os.path.exists(config["directories"]["themes"] + "/" + config["site"]["theme"] + "/config.yaml"):
+        path = config["directories"]["themes"] + "/" + config["site"]["theme"]
+        with open(path + "/config.yaml") as file:
+            try:
+                theme = yaml.safe_load(file)
+            except yaml.YAMLError as exception:
+                print(exception)
+    else:
+        print("Theme configuration file not found!")
+
+
+def parsetemplate(input_data, template_type):
     global config
     loadtheme()
-    themefile = config['directories']['themes'] + "/" + config['site']['theme'] + "/" + type + ".html"
-    if os.path.exists(themefile):
-        p = re.compile('(\[\[([a-z]+)\]\])')
-        output = str(open(themefile).read())
-        matches = p.findall(output)
-        for placeholder, token in matches:
-            if token in input:
-                output = output.replace(placeholder, str(input[token]))
-        return output
+    theme_directory = config['directories']['themes']
+    theme_name = config['site']['theme']
+    theme_file = os.path.join(theme_directory, theme_name, f"{template_type}.html")
+
+    if os.path.exists(theme_file):
+        with open(theme_file, 'r', encoding='utf-8') as file:
+            template_content = file.read()
+        placeholder_pattern = r'{{(.*?)}}'
+        matches = re.findall(placeholder_pattern, template_content)
+        for match in matches:
+            placeholder = f'{{{{{match}}}}}'
+            if match in input_data:
+                template_content = template_content.replace(placeholder, str(input_data[match]))
+            else:
+                print(f"Warning: Placeholder '{match}' not found in input data.")
+
+        return template_content
     else:
-        print("Warning!!! Template not found...")
+        print("Warning: Template not found.")
+    return None
 
 
 def parsesnippet(input, snippet):
     global theme
-    loadtheme()
-    p = re.compile('(\[\[([a-z]+)\]\])')
+    p = re.compile(r'\{\{([a-z]+)\}\}')
     matches = p.findall(theme["snippets"][snippet])
     output = theme["snippets"][snippet]
-    for p, match in matches:
+
+    for match in matches:
         if match in input:
-            output = output.replace(p, str(input[match]))
+            output = output.replace(f'{{{{{match}}}}}', str(input[match]))
+
     return output
+
+
+def gencontent():
+    global content, config
+    loadtheme()
+    if os.path.exists(config["directories"]["themes"] + "/" + config["site"]["theme"] + "/assets"):
+        print("Found theme assets, Copying them.")
+        if os.path.exists(config["directories"]["output"] + "/public/assets"):
+            shutil.rmtree(config["directories"]["output"] + "/public/assets")
+        shutil.copytree(config["directories"]["themes"] + "/" + config["site"]["theme"] + "/assets",
+                        config["directories"]["output"] + "/public/assets")
+    if not os.path.exists(config["directories"]["output"]):
+        os.mkdir(config["directories"]["output"])
+    if not os.path.exists(config["directories"]["output"] + "/post"):
+        os.mkdir(config["directories"]["output"] + "/post")
+    for document in content:
+        document = content[document]
+        document.update(config["author"])
+        document.update(config["site"])
+        outfile = open(document["outfile"], "w")
+        outfile.write(parsetemplate(document, "post"))
+        outfile.close()
+    if os.path.exists("api.json"):
+        shutil.copy("api.json", config["directories"]["output"] + "/api.json")
 
 
 def generatehomepage():
@@ -342,90 +228,20 @@ def generatehomepage():
     homecontent.update(config["site"])
     homecontent["body"] = ""
     tempcontent = {}
-    date_order = OrderedDict(sorted(content["post"].items()), key=lambda t: t["date"])
+    date_order = OrderedDict(sorted(content.items()), key=lambda t: t["date"])
     for post in date_order:
         if type(date_order[post]) is dict:
-            if "post" in content:
-                tempcontent.update(content["post"][post])
-                tempcontent["file"] = slugify(tempcontent["file"])
-                tempcontent["body"] = htmltotext(tempcontent["body"])
-                tempcontent["body"] = (tempcontent["body"][:120] + '..') if len(tempcontent["body"]) > 120 else \
-                    tempcontent["body"]
-                homecontent["body"] += parsesnippet(tempcontent, "home_post")
-                tempcontent = {}
-    filename = config["directories"]["output"] + "/index.html"
-    outfile = open(filename, "w")
-    outfile.write(parsetemplate(homecontent, "home"))
-    outfile.close()
-
-
-def generatehtml():
-    print("Started scan.")
-    scancontent()
-    if not "post" in content:
-        print("No content found.")
-        exit(0)
-    print("Scan completed. Generating homepage")
-    generatehomepage()
-    categoryhomehtml = {}
-    categoryhomehtml.update(config["author"])
-    categoryhomehtml.update(config["site"])
-    categoryhomehtml["body"] = ""
-    if not os.path.exists(config["directories"]["output"] + "/category/"):
-        os.mkdir(config["directories"]["output"] + "/category/")
-    for doc in content:
-        if doc == "wf_site_config":
-            continue
-        categoryfile = config["directories"]["output"] + "/category/" + doc + ".html"
-        categoryhomehtml["body"] += parsesnippet({"file": doc + ".html", "title": doc, "body": doc}, "category_home")
-        innercontent = content[doc]
-        categoryhtml = {}
-        categoryhtml.update(config["author"])
-        categoryhtml.update(config["site"])
-        categoryhtml["body"] = ""
-        for documentcontent in innercontent:
-            document = content[doc][documentcontent]
-            if not os.path.exists(config["directories"]["output"] + "/" + document["type"]):
-                os.mkdir(config["directories"]["output"] + "/" + document["type"])
-            filename = config["directories"]["output"] + "/" + document["type"] + "/" + slugify(
-                document["file"]) + ".html"
-            outfile = open(filename, "w")
-            outfile.write(parsetemplate(document, document["type"]))
-            outfile.close()
-            tempcontent = {}
-            tempcontent.update(document)
-            categoryhtml["title"] = doc
-            tempcontent["body"] = htmltotext(tempcontent["body"])
+            tempcontent.update(content[post])
+            tempcontent["file"] = str.replace(tempcontent["outfile"], config["directories"]["output"] + "/", "")
+            tempcontent["body"] = html2text(tempcontent["body"])
             tempcontent["body"] = (tempcontent["body"][:120] + '..') if len(tempcontent["body"]) > 120 else \
                 tempcontent["body"]
-            categoryhtml["body"] += parsesnippet(tempcontent, "category")
-        outfile = open(categoryfile, "w")
-        outfile.write(parsetemplate(categoryhtml, "category_page"))
+            homecontent["body"] += parsesnippet(tempcontent, "home_post")
+            tempcontent = {}
+        filename = config["directories"]["output"] + "/index.html"
+        outfile = open(filename, "w")
+        outfile.write(parsetemplate(homecontent, "home"))
         outfile.close()
-    outfile = open(config["directories"]["output"] + "/categories.html", "w")
-    outfile.write(parsetemplate(categoryhomehtml, "category"))
-    outfile.close()
-    if os.path.exists(config["directories"]["themes"] + "/" + config["site"]["theme"] + "/assets"):
-        print("Found theme assets, Copying them.")
-        if os.path.exists(config["directories"]["output"] + "/public/assets"):
-            shutil.rmtree(config["directories"]["output"] + "/public/assets")
-        shutil.copytree(config["directories"]["themes"] + "/" + config["site"]["theme"] + "/assets",
-                        config["directories"]["output"] + "/public/assets")
-    print("Site generation completed.")
-
-
-def loadtheme():
-    global theme
-    global config
-    if os.path.exists(config["directories"]["themes"] + "/" + config["site"]["theme"] + "/config.yaml"):
-        path = config["directories"]["themes"] + "/" + config["site"]["theme"]
-        with open(path + "/config.yaml") as file:
-            try:
-                theme = yaml.safe_load(file)
-            except yaml.YAMLError as exception:
-                print(exception)
-    else:
-        print("Theme configuration file not found!")
 
 
 def downloadtheme(name):
@@ -484,8 +300,8 @@ def clearcontent():
         shutil.rmtree(config["directories"][directory])
         if not os.path.exists(config["directories"][directory]):
             os.mkdir(config["directories"][directory])
-        if os.path.exists("generated_output.json"):
-            os.remove("generated_output.json")
+        if os.path.exists("api.json"):
+            os.remove("api.json")
 
 
 def initapp():
@@ -543,51 +359,6 @@ def initapp():
     exit(0)
 
 
-def argvparser():
-    args = sys.argv[1:]
-    force = False
-    for arg in args:
-        if arg == "init" or arg == "-init":
-            initapp()
-        elif arg == "-f" or arg == "--force":
-            force = True
-        elif arg == "generate" or arg == "gen":
-            generatehtml()
-        elif arg == "clear":
-            val = input(
-                "Want to clean install WordFlow? (this will remove every configuration and files.) (yes or no)> ")
-            if val != "yes":
-                print("Bye :)")
-            else:
-                clearinstallation()
-        elif arg == "installtheme" or arg == "theme":
-            name = input("Theme name> ")
-            downloadtheme(name)
-        elif arg == "scan":
-            scancontent()
-        elif arg == "clearcontent" or arg == "-cc":
-            if not force:
-                val = input(
-                    "Want to wipe all generated content? (yes or no)> ")
-                if val != "yes":
-                    print("Bye :)")
-                else:
-                    clearcontent()
-            else:
-                clearcontent()
-        elif arg == "publishapi":
-            if not force:
-                print("This option will make api published. Are you sure?")
-                val = input("(yes, no)> ")
-                if val == "yes":
-                    shutil.copyfile("generated_output.json", config["directories"]["output"] + "/api.json")
-            else:
-                shutil.copyfile("generated_output.json", config["directories"]["output"] + "/api.json")
-        else:
-            print("Project WordFlow. Copyright (C) devsimsek.")
-            print("Help guide will be added when I can create a stable version.")
-
-
 def wordflow():
     if not os.path.exists("config.yaml"):
         print("Warning: Configuration file not found. Launching initializer.")
@@ -601,8 +372,51 @@ def wordflow():
                 print(exception)
 
 
+def argvparser():
+    global config
+    args = sys.argv[1:]
+    force = False
+    for arg in args:
+        if arg == "gen" or arg == "-g":
+            print("Started scan.")
+            scandir(config["directories"]["input"])
+            gencontent()
+            generatehomepage()
+        elif arg == "-f" or arg == "--force":
+            force = True
+        elif arg == "init" or arg == "-init":
+            initapp()
+        elif arg == "clear" or arg == "-c":
+            val = input(
+                "Want to clean install WordFlow? (this will remove every configuration and files.) (yes or no)> ")
+            if val != "yes":
+                print("Bye :)")
+            else:
+                clearinstallation()
+        elif arg == "clear":
+            val = input(
+                "Want to clean install WordFlow? (this will remove every configuration and files.) (yes or no)> ")
+            if val != "yes":
+                print("Bye :)")
+            else:
+                clearinstallation()
+        elif arg == "installtheme" or arg == "theme":
+            name = input("Theme name> ")
+            downloadtheme(name)
+        elif arg == "clearcontent" or arg == "-cc":
+            if not force:
+                val = input(
+                    "Want to wipe all generated content? (yes or no)> ")
+                if val != "yes":
+                    print("Bye :)")
+                else:
+                    clearcontent()
+            else:
+                clearcontent()
+
+
 if __name__ == "__main__":
     wordflow()
     argvparser()
 else:
-    print("Illegal Launch Option")
+    print("illegal launch option")
