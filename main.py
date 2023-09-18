@@ -117,6 +117,7 @@ def scandir(directory_path):
         raise ValueError(f'Directory not found: {directory_path}')
 
     for filename in os.listdir(directory_path):
+        print(filename)
         if config["generator"]["mode"] == "md":
             if filename.endswith('.md'):
                 markdown_file = os.path.join(directory_path, filename)
@@ -347,11 +348,8 @@ def initapp():
             os.mkdir(config["directories"][directory])
         else:
             print(directory + " exists.")
-    if os.path.exists(config["directories"]["input"]):
-        if not os.path.exists(config["directories"]["input"] + "/post"):
-            os.mkdir(config["directories"]["input"] + "/post")
-        if not os.path.exists(config["directories"]["input"] + "/page"):
-            os.mkdir(config["directories"]["input"] + "/page")
+    if not os.path.exists(config["directories"]["input"]):
+        os.mkdir(config["directories"]["input"])
     print("Installing Theme")
     downloadtheme(config["site"]["theme"])
 
